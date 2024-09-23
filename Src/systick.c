@@ -5,7 +5,9 @@
 #define SYSTEM_CLOCK 		16000000	/* 16 MHz */
 #define TRIGGER_EVERY_MS	(SYSTEM_CLOCK / 1000U)
 
-uint32_t tick_counter;
+static uint32_t get_tick_counter(void);
+
+uint32_t tick_counter_global;
 
 void systick_initialize(void)
 {
@@ -30,10 +32,29 @@ void systick_initialize(void)
 
 void SysTick_Handler(void)
 {
-	led_orange_toggle();
+	tick_counter_global++;
 }
 
-void systick_delay_ms(uint32_t delay);
+void systick_delay_ms(uint32_t delay)
+{
+	/* Start variable is used as the starting reference point to calculate the correct delay.
+	 * The current tick_counter is repeatedly checked minus "start" variable to know when the delay
+	 * 	has finished.
+	 */
+	uint32_t start = get_tick_counter();
+	while (get_tick_counter() - start <= delay){}
+}
 
 
-/*static uint32_t get_tick_counter(void);*/
+static uint32_t get_tick_counter(void)
+{
+	uint32_t tick_counter_local;
+	/* Return the tick counter variable inside of a critical section.
+	 * This is so the systick interrupt cannot preempt this function and modify the value while it is being read.
+	 */
+	__disable_irq();
+	tick_counter_local = tick_counter_global;
+	_enable_irq();
+
+	return tick_counter_local;
+}

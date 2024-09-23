@@ -54,7 +54,7 @@ static uint32_t get_tick_counter(void)
 	 */
 	__disable_irq();
 	tick_counter_local = tick_counter_global;
-	_enable_irq();
+	__enable_irq();
 
 	return tick_counter_local;
 }

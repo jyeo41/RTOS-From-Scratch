@@ -1,5 +1,7 @@
+#include <stdint.h>
 #include "stm32f407xx.h"
 #include "systick.h"
+#include "kernel.h"
 #include "led.h"
 
 #define SYSTEM_CLOCK 		16000000	/* 16 MHz */
@@ -33,6 +35,11 @@ void systick_initialize(void)
 void SysTick_Handler(void)
 {
 	tick_counter_global++;
+
+	/* Remember the scheduler needs to be called inside of a critical section to avoid race conditions */
+	__disable_irq();
+	kernel_scheduler();
+	__enable_irq();
 }
 
 void systick_delay_ms(uint32_t delay)

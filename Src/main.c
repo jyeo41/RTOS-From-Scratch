@@ -7,14 +7,20 @@ uint32_t blinky1_stack[40];
 tcb_type blinky1;
 void main_blinky1(void)
 {
-
+	while (1) {
+		led_red_toggle();
+		systick_delay_ms(1000);
+	}
 }
 
 uint32_t blinky2_stack[40];
 tcb_type blinky2;
 void main_blinky2(void)
 {
-
+	while (1) {
+		led_orange_toggle();
+		systick_delay_ms(1000);
+	}
 }
 
 int main (void)
@@ -37,7 +43,6 @@ int main (void)
 		sizeof(blinky2_stack));
 
 	while (1) {
-		led_red_toggle();
-		systick_delay_ms(1000);
+
 	}
 }

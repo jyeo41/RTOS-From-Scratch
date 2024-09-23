@@ -19,7 +19,7 @@ void kernel_initialize(void)
 void kernel_scheduler(void)
 {
 	/* Scheduling algorithm goes here such as FCFS, RR, Priority-based, etc */
-	if (current_thread != next_thread) {
+	if (next_thread != current_thread) {
 		/* Set the PendSVHandler bit to get ready for context switch.
 		 * Note: NVIC_SetPendingIRQ(PendSV_IRQn) does NOT work.
 		 * 	This is because NVIC_SetPendingIRQ() function only works for external, positive IRQ numbered interrupts.
@@ -91,22 +91,50 @@ void kernel_tcb_start(
 	}
 }
 
-void PendSV_Handler(void)
+__attribute__((naked)) void PendSV_Handler(void)
 {
-	void* sp;
-	/* Context switching should NEVER be preempted. It MUST happen in a critical section to avoid race conditions */
-	__disable_irq();
+	/* __disable__irq(); */
+	__asm("CPSID	I");
+	__asm("LDR    R3, =current_thread");
 
-	/* At the start of the program there won't be a thread running, so only push registers when there is a thread running.
-	 *
+
+	/* if (current_thread != (tcb_type*)0) */
+	__asm("LDR     R3, [R3, #0]");
+	__asm("CMP     R3, #0");
+	__asm("BEQ.N   PendSV_Restore");
+
+	/* Save R4 - R11 */
+	__asm("PUSH	{R4-R11}");
+
+	/* current_thread->sp = sp;
+	 * Save the current SP in to current_thread->sp
 	 */
-	if (current_thread != (tcb_type*)0) {
-		/* Push R4-R11 */
-		current_thread->sp = sp;
-	}
-	current_thread = next_thread;
-	sp = current_thread->sp;
+	__asm("LDR     R3, =current_thread");
+	__asm("LDR	   R3, [R3, #0]");
+	__asm("STR     SP, [R3, #0]");
 
-	/* Pop R4-R11 */
-	__enable_irq();
+	/* current_thread = next_thread; */
+	__asm("PendSV_Restore:");
+	__asm("LDR     R3, =next_thread");
+	__asm("LDR     R3, [R3, #0]");
+	__asm("LDR     R2, =current_thread");
+	__asm("STR     R3, [R2, #0]");
+
+	/* sp = current_thread->sp;
+	 * Note: Since SP is a special-purpose register, you have to use LDR instruction.
+	 * 		 Replaced "STR [R3, #0], SP" with
+	 * 		 		  "LDR SP, [R3, #0]"
+	 */
+	__asm("LDR     R3, =current_thread");	/* Load the address of current thread */
+	__asm("LDR     R3, [R3, #0]");			/* Load the value of current thread (pointer to TCB) */
+	__asm("LDR     SP, [R3, #0]");			/* Load the SP from TCB into the stack pointer */
+
+	/* Restore R4-R11 */
+	__asm("POP	 {R4-R11}");
+
+	/* __enable_irq(); */
+	__asm("CPSIE   I");
+
+	/* return to the next thread */
+	__asm("BX	LR");
 }

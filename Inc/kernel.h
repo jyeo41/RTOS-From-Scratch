@@ -13,12 +13,16 @@ typedef struct {
 
 	/* Timeout variable to keep track of how long a thread should stay blocked */
 	uint32_t timeout;
+
+	/* Thread priority property */
+	uint8_t priority;
 }tcb_type;
 
 /* Function pointer needed to pass in the address of the respective threads */
 typedef void (*tcb_type_handler)();
 
 void kernel_initialize(void);
+void kernel_scheduler_priority_based(void);
 void kernel_scheduler_round_robin(void);
 void kernel_run(void);
 void kernel_tcb_block(uint32_t blocking_timeout);
@@ -27,6 +31,7 @@ void kernel_tcb_permit(void);
 /* Function to start a thread, the void* stack_array variable is the address to the start of the stack in memory */
 void kernel_tcb_start(
 	tcb_type* me,
+	uint8_t priority,
 	tcb_type_handler tcb_handler,
 	void* stack_array,
 	uint32_t stack_size);

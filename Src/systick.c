@@ -35,7 +35,7 @@ void systick_initialize(void)
 
 void SysTick_Handler(void)
 {
-	led_green_toggle();
+	led_blue_toggle();
 
 	/* Doesn't need to run inside of a critical section because an interrupt cannot be pre-empted by a thread.
 	 * This means no thread will be able to possibly modify the values of the kernel_tcbs[] while this runs
@@ -44,10 +44,10 @@ void SysTick_Handler(void)
 
 	/* Remember the scheduler needs to be called inside of a critical section to avoid race conditions */
 	__disable_irq();
-	kernel_scheduler_round_robin();
+	kernel_scheduler_priority_based();
 	__enable_irq();
 
-	led_green_toggle();
+	led_blue_toggle();
 }
 
 void systick_delay_ms(uint32_t delay)

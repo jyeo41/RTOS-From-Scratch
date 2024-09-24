@@ -1,6 +1,9 @@
 #include <stdint.h>
 #include "stm32f407xx.h"
 #include "kernel.h"
+#include "led.h"
+
+#define LOG2(x) (32U - __builtin_clz(x))
 
 static void kernel_on_idle(void);
 
@@ -11,7 +14,8 @@ static tcb_type* volatile next_thread;
 static tcb_type* kernel_tcbs[32 + 1];	/* array that holds all the thread pointers */
 static uint8_t kernel_tcbs_count;		/* int value that keeps count of total threads started */
 static uint8_t kernel_tcbs_index;		/* index value to be used for round robin scheduling */
-static uint32_t kernel_tcbs_ready_mask;		/* 32 bit mask to keep track of all thread's and whether they are ready or blocked */
+static uint32_t kernel_tcbs_ready_mask;		/* 32 bit mask to keep track of all thread's and whether they are ready */
+static uint32_t kernel_tcbs_delayed_mask;	/* 32 bit mask to keep rack of all delayed threads with priority scheduler implementation */
 
 
 uint32_t idlethread_stack[40];
@@ -31,6 +35,7 @@ void kernel_initialize(void)
 
 	kernel_tcb_start(
 			&idlethread,
+			0U,
 			&main_idlethread,
 			idlethread_stack,
 			sizeof(idlethread_stack));
@@ -44,8 +49,29 @@ void kernel_initialize(void)
 void kernel_run(void)
 {
 	__disable_irq();
-	kernel_scheduler_round_robin();
+	kernel_scheduler_priority_based();
 	__enable_irq();
+}
+
+void kernel_scheduler_priority_based(void)
+{
+	/* If no threads are ready to run, run the idle thread by setting the next thread manually to idle thread.
+	 * Else, calculate the priority by finding the leading zeroes and then subtracting from 32 by using LOG2(x) define */
+	if (kernel_tcbs_ready_mask == 0U) {
+		next_thread = kernel_tcbs[0];
+	} else {
+		next_thread = kernel_tcbs[LOG2(kernel_tcbs_ready_mask)];
+	}
+
+	if (next_thread != current_thread) {
+		/* Set the PendSVHandler bit to get ready for context switch.
+		 * Note: NVIC_SetPendingIRQ(PendSV_IRQn) does NOT work.
+		 * 	This is because NVIC_SetPendingIRQ() function only works for external, positive IRQ numbered interrupts.
+		 * 	PendSV is a special interrupt just like Systick which has a negative IRQn.
+		 * 	This means you have to use the SCB_ICSR register to set the pending bit.
+		 */
+		SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+	}
 }
 
 void kernel_scheduler_round_robin(void)
@@ -83,6 +109,7 @@ void kernel_scheduler_round_robin(void)
 /* Function to initialize threads */
 void kernel_tcb_start(
 	tcb_type* me,
+	uint8_t priority,
 	tcb_type_handler tcb_handler,
 	void* stack_array,
 	uint32_t stack_size)
@@ -141,19 +168,22 @@ void kernel_tcb_start(
 		*sp = 0xBAADF00DU;
 	}
 
+	me->priority = priority;
+	kernel_tcbs_count++;
+
 	/* Check to make sure we don't go over the thread limit */
 	if (kernel_tcbs_count < (sizeof(kernel_tcbs) / sizeof(kernel_tcbs[0]))) {
-		kernel_tcbs[kernel_tcbs_count] = me;
+		kernel_tcbs[priority] = me;
 	}
 
 	/* For all non-idle threads, make sure to set them ready to run.
 	 * We skip the idle thread by checking > 1 */
-	if (kernel_tcbs_count > 0) {
-		kernel_tcbs_ready_mask |= (1U << (kernel_tcbs_count - 1));
+	if (priority > 0) {
+		kernel_tcbs_ready_mask |= (1U << (priority - 1));
 	}
 
-	/* Increment the count at the end, otherwise the tcbs_ready_mask won't be set properly and the bit alignment will be off */
-	kernel_tcbs_count++;
+/*	 Increment the count at the end, otherwise the tcbs_ready_mask won't be set properly and the bit alignment will be off
+	kernel_tcbs_count++;*/
 }
 
 /* Function to block current thread for a specified amount of time.
@@ -170,11 +200,14 @@ void kernel_tcb_block(uint32_t blocking_timeout)
 		/* First load the desired blocking timeout to the thread attribute */
 		current_thread->timeout = blocking_timeout;
 
-		/* Then block the thread by clearing the appropriate bit in the tcb ready mask */
-		kernel_tcbs_ready_mask &= ~(1U << (kernel_tcbs_index - 1));
+		/* Then block the thread by clearing the appropriate bit in the tcb ready mask.
+		 * And setting the appropriate bit in the tcb delayed mask.
+		 */
+		kernel_tcbs_ready_mask &= ~(1U << (current_thread->priority - 1U));
+		kernel_tcbs_delayed_mask |= (1U << (current_thread->priority - 1U));
 
 		/* Immediately call the scheduler to context switch away from the blocked thread */
-		kernel_scheduler_round_robin();
+		kernel_scheduler_priority_based();
 	}
 
 	__enable_irq();
@@ -187,16 +220,30 @@ void kernel_tcb_block(uint32_t blocking_timeout)
  */
 void kernel_tcb_permit(void)
 {
-	/* Start at i = 1U to skip the idle thread */
-	uint8_t i;
-	for (i = 1U; i < kernel_tcbs_count; i++) {
-		if (kernel_tcbs[i]->timeout != 0) {
-			--kernel_tcbs[i]->timeout;
+	uint32_t kernel_tcbs_working_mask = kernel_tcbs_delayed_mask;
 
-			/* Nested if statement because the previous if statement COULD decrement a thread's timeout to 0 */
-			if (kernel_tcbs[i]->timeout == 0) {
-				kernel_tcbs_ready_mask |= (1U << (i - 1));
+	/* the idea is to only iterate over the 1 bits, instead of all the bits since there could be big gaps between priorities.
+	 * As long as a bit is set in the working_mask, this means some threads are still blocked and need to be processed for their
+	 * timeouts.
+	 */
+	while (kernel_tcbs_working_mask != 0U) {
+		tcb_type* tcb = kernel_tcbs[LOG2(kernel_tcbs_working_mask)];
+
+		/* Conditional sanity check for the thread tcb.
+		 * Make sure the thread is in use and the timeout isn't 0 yet because it must be a delayed thread */
+		if ((tcb != (tcb_type*)0U) && (tcb->timeout != 0)) {
+			tcb->timeout--;
+
+			/* If the timeout reaches 0, then we need to make the thread ready to run.
+			 * Also clear the bit in the delayed mask since it's no longer delayed
+			 */
+			if (tcb->timeout == 0) {
+				kernel_tcbs_ready_mask |= (1U << (tcb->priority - 1));
+				kernel_tcbs_delayed_mask &= ~(1U << (tcb->priority - 1));
 			}
+
+			/* The thread should always be removed from the working mask because the timeout has been processed */
+			kernel_tcbs_working_mask &= ~(1U << (tcb->priority - 1));
 		}
 	}
 }

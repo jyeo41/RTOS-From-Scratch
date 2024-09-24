@@ -9,6 +9,7 @@
 
 static uint32_t get_tick_counter(void);
 
+
 uint32_t tick_counter_global;
 
 void systick_initialize(void)
@@ -34,12 +35,15 @@ void systick_initialize(void)
 
 void SysTick_Handler(void)
 {
+	led_green_toggle();
 	tick_counter_global++;
 
 	/* Remember the scheduler needs to be called inside of a critical section to avoid race conditions */
 	__disable_irq();
 	kernel_scheduler_round_robin();
 	__enable_irq();
+
+	led_green_toggle();
 }
 
 void systick_delay_ms(uint32_t delay)

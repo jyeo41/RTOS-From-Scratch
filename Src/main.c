@@ -9,7 +9,8 @@ void main_blinky1(void)
 {
 	while (1) {
 		led_red_toggle();
-		systick_delay_ms(1500);
+		led_red_toggle();
+		//systick_delay_ms(1500);
 	}
 }
 
@@ -19,7 +20,8 @@ void main_blinky2(void)
 {
 	while (1) {
 		led_orange_toggle();
-		systick_delay_ms(700);
+		led_orange_toggle();
+		//systick_delay_ms(700);
 	}
 }
 
@@ -29,12 +31,16 @@ void main_blinky3(void)
 {
 	while (1) {
 		led_blue_toggle();
-		systick_delay_ms(300);
+		led_blue_toggle();
+		//systick_delay_ms(300);
 	}
 }
 
 int main (void)
 {
+	/* Initialize interrupt priorities and the idle thread for efficient blocking */
+	kernel_initialize();
+
 	/* Basic Startup Config Build */
 	led_initialize();
 	systick_initialize();
@@ -58,5 +64,5 @@ int main (void)
 		sizeof(blinky3_stack));
 
 	/* This start function replaces the redundant superloop */
-	kernel_start();
+	kernel_run();
 }

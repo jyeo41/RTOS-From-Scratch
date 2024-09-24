@@ -13,7 +13,8 @@ typedef struct {
 /* Function pointer needed to pass in the address of the respective threads */
 typedef void (*tcb_type_handler)();
 
-void kernel_start(void);
+void kernel_initialize(void);
+void kernel_run(void);
 void kernel_scheduler_round_robin(void);
 
 /* Function to start a thread, the void* stack_array variable is the address to the start of the stack in memory */

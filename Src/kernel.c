@@ -2,6 +2,8 @@
 #include "stm32f407xx.h"
 #include "kernel.h"
 
+static void kernel_on_idle(void);
+
 /* These pointers will be used inside ISRs so make sure they're volatile */
 static tcb_type* volatile current_thread;
 static tcb_type* volatile next_thread;
@@ -9,18 +11,37 @@ static tcb_type* volatile next_thread;
 static tcb_type* kernel_tcbs[32 + 1];	/* array that holds all the thread pointers */
 static uint8_t kernel_tcbs_count;		/* int value that keeps count of total threads started */
 static uint8_t kernel_tcbs_index;		/* index value to be used for round robin scheduling */
+static uint32_t kernel_tcb_ready;		/* 32 bit mask to keep track of all thread's and whether they are ready or blocked */
+
+uint32_t idlethread_stack[40];
+tcb_type idlethread;
+void main_idlethread(void)
+{
+	while (1) {
+		kernel_on_idle();
+	}
+}
+
+void kernel_initialize(void)
+{
+	/* Lower number set means higher priority calling. */
+	NVIC_SetPriority(SysTick_IRQn, 0U);
+	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
+
+	kernel_tcb_start(
+			&idlethread,
+			&main_idlethread,
+			idlethread_stack,
+			sizeof(idlethread_stack));
+}
 
 /* Function to start the kernel.
  * Set the priorities for the interrupts so PendSV does NOT preempt Systick.
  * PendSV should only context switch by tail-chaining and once other interrupts have already been serviced.
  * Start the scheduler to initiate the running state of one thread, without having to wait for the Systick to trigger it first.
  */
-void kernel_start(void)
+void kernel_run(void)
 {
-	/* Lower number set means higher priority calling. */
-	NVIC_SetPriority(SysTick_IRQn, 0U);
-	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
-
 	__disable_irq();
 	kernel_scheduler_round_robin();
 	__enable_irq();
@@ -113,6 +134,11 @@ void kernel_tcb_start(
 	if (kernel_tcbs_count < (sizeof(kernel_tcbs) / sizeof(kernel_tcbs[0]))) {
 		kernel_tcbs[kernel_tcbs_count++] = me;
 	}
+}
+
+static void kernel_on_idle(void)
+{
+
 }
 
 /* ARM Cortex M exception handler that centralizes context switching for an RTOS implementation.

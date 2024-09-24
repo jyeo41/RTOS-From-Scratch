@@ -36,14 +36,13 @@ void led_initialize(void)
 }
 
 /* PD 12 */
-void led_green_on(void)
+void led_green_toggle(void)
 {
-	GPIOD->ODR |= (1 << 12);
-}
-
-void led_green_off(void)
-{
-	GPIOD->ODR &= ~(1 << 12);
+	if (GPIOD->ODR & GPIO_ODR_OD12) {
+		GPIOD->BSRR = GPIO_BSRR_BR12;
+	} else {
+		GPIOD->BSRR = GPIO_BSRR_BS12;
+	}
 }
 
 /* Orange LED PD 13 */

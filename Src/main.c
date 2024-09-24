@@ -19,7 +19,17 @@ void main_blinky2(void)
 {
 	while (1) {
 		led_orange_toggle();
-		systick_delay_ms(1000);
+		systick_delay_ms(700);
+	}
+}
+
+uint32_t blinky3_stack[40];
+tcb_type blinky3;
+void main_blinky3(void)
+{
+	while (1) {
+		led_blue_toggle();
+		systick_delay_ms(300);
 	}
 }
 
@@ -28,7 +38,6 @@ int main (void)
 	/* Basic Startup Config Build */
 	led_initialize();
 	systick_initialize();
-	kernel_initialize();
 
 	kernel_tcb_start(
 		&blinky1,
@@ -42,7 +51,12 @@ int main (void)
 		blinky2_stack,
 		sizeof(blinky2_stack));
 
-	while (1) {
-		led_blue_toggle();
-	}
+	kernel_tcb_start(
+		&blinky3,
+		&main_blinky3,
+		blinky3_stack,
+		sizeof(blinky3_stack));
+
+	/* This start function replaces the redundant superloop */
+	kernel_start();
 }

@@ -52,7 +52,6 @@ void systick_delay_ms(uint32_t delay)
 	while (get_tick_counter() - start <= delay){}
 }
 
-
 static uint32_t get_tick_counter(void)
 {
 	uint32_t tick_counter_local;

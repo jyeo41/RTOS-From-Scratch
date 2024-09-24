@@ -43,6 +43,6 @@ int main (void)
 		sizeof(blinky2_stack));
 
 	while (1) {
-
+		led_blue_toggle();
 	}
 }

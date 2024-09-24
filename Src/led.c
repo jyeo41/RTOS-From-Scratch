@@ -29,6 +29,10 @@ void led_initialize(void)
 	/* Output Direction for Red LED */
 	GPIOD->MODER &= ~GPIO_MODER_MODER14_Msk;
 	GPIOD->MODER |= GPIO_MODER_MODER14_0;
+
+	/* Output Direction for Blue LED */
+	GPIOD->MODER &= ~GPIO_MODER_MODER15_Msk;
+	GPIOD->MODER |= GPIO_MODER_MODER15_0;
 }
 
 /* PD 12 */
@@ -66,5 +70,14 @@ void led_red_toggle(void)
 		GPIOD->BSRR = GPIO_BSRR_BR14;
 	} else {
 		GPIOD->BSRR = GPIO_BSRR_BS14;
+	}
+}
+
+void led_blue_toggle(void)
+{
+	if (GPIOD->ODR & GPIO_ODR_OD15) {
+		GPIOD->BSRR = GPIO_BSRR_BR15;
+	} else {
+		GPIOD->BSRR = GPIO_BSRR_BS15;
 	}
 }

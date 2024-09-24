@@ -9,8 +9,9 @@ void main_blinky1(void)
 {
 	while (1) {
 		led_red_toggle();
+		kernel_tcb_block(500);
 		led_red_toggle();
-		//systick_delay_ms(1500);
+		kernel_tcb_block(300);
 	}
 }
 
@@ -20,8 +21,9 @@ void main_blinky2(void)
 {
 	while (1) {
 		led_orange_toggle();
+		kernel_tcb_block(200);
 		led_orange_toggle();
-		//systick_delay_ms(700);
+		kernel_tcb_block(400);
 	}
 }
 
@@ -31,8 +33,9 @@ void main_blinky3(void)
 {
 	while (1) {
 		led_blue_toggle();
+		kernel_tcb_block(500);
 		led_blue_toggle();
-		//systick_delay_ms(300);
+		kernel_tcb_block(600);
 	}
 }
 

@@ -2,6 +2,8 @@
 #include "stm32f407xx.h"
 #include "kernel.h"
 
+static void kernel_on_idle(void);
+
 /* These pointers will be used inside ISRs so make sure they're volatile */
 static tcb_type* volatile current_thread;
 static tcb_type* volatile next_thread;
@@ -9,18 +11,38 @@ static tcb_type* volatile next_thread;
 static tcb_type* kernel_tcbs[32 + 1];	/* array that holds all the thread pointers */
 static uint8_t kernel_tcbs_count;		/* int value that keeps count of total threads started */
 static uint8_t kernel_tcbs_index;		/* index value to be used for round robin scheduling */
+static uint32_t kernel_tcbs_ready_mask;		/* 32 bit mask to keep track of all thread's and whether they are ready or blocked */
+
+
+uint32_t idlethread_stack[40];
+tcb_type idlethread;
+void main_idlethread(void)
+{
+	while (1) {
+		kernel_on_idle();
+	}
+}
+
+void kernel_initialize(void)
+{
+	/* Lower number set means higher priority calling. */
+	NVIC_SetPriority(SysTick_IRQn, 0U);
+	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
+
+	kernel_tcb_start(
+			&idlethread,
+			&main_idlethread,
+			idlethread_stack,
+			sizeof(idlethread_stack));
+}
 
 /* Function to start the kernel.
  * Set the priorities for the interrupts so PendSV does NOT preempt Systick.
  * PendSV should only context switch by tail-chaining and once other interrupts have already been serviced.
  * Start the scheduler to initiate the running state of one thread, without having to wait for the Systick to trigger it first.
  */
-void kernel_start(void)
+void kernel_run(void)
 {
-	/* Lower number set means higher priority calling. */
-	NVIC_SetPriority(SysTick_IRQn, 0U);
-	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
-
 	__disable_irq();
 	kernel_scheduler_round_robin();
 	__enable_irq();
@@ -28,15 +50,25 @@ void kernel_start(void)
 
 void kernel_scheduler_round_robin(void)
 {
-	kernel_tcbs_index++;
-
-	/* Wrap around to the beginning of the tcbs array once you get to the end */
-	if (kernel_tcbs_index == kernel_tcbs_count) {
+	/* If no threads are ready to run, run the idle thread by setting the index to 0 */
+	if (kernel_tcbs_ready_mask == 0U) {
 		kernel_tcbs_index = 0U;
+	} else {
+		/* We need to check which thread(s) is ready to run. This means iterating through the array of all tcbs.
+		 * At each iteration, we check the corresponding ready_mask bit for that thread_index and run it if its ready.
+		 * The loop should continue to run as long as the thread bit it's checking is 0, UNTIL it reaches a ready thread. */
+		do {
+			++kernel_tcbs_index;
+			/* Wrap around to the beginning of the tcbs array once you get to the end.
+			 * Skipping the idle thread. */
+			if (kernel_tcbs_index == kernel_tcbs_count) {
+				kernel_tcbs_index = 1U;
+			}
+		} while ((kernel_tcbs_ready_mask & (1U << (kernel_tcbs_index - 1U))) == 0U);
 	}
+	/* Once it's found a ready thread, schedule it to run as the next thread */
 	next_thread = kernel_tcbs[kernel_tcbs_index];
 
-	/* Scheduling algorithm goes here such as FCFS, RR, Priority-based, etc */
 	if (next_thread != current_thread) {
 		/* Set the PendSVHandler bit to get ready for context switch.
 		 * Note: NVIC_SetPendingIRQ(PendSV_IRQn) does NOT work.
@@ -48,7 +80,7 @@ void kernel_scheduler_round_robin(void)
 	}
 }
 
-
+/* Function to initialize threads */
 void kernel_tcb_start(
 	tcb_type* me,
 	tcb_type_handler tcb_handler,
@@ -111,8 +143,68 @@ void kernel_tcb_start(
 
 	/* Check to make sure we don't go over the thread limit */
 	if (kernel_tcbs_count < (sizeof(kernel_tcbs) / sizeof(kernel_tcbs[0]))) {
-		kernel_tcbs[kernel_tcbs_count++] = me;
+		kernel_tcbs[kernel_tcbs_count] = me;
 	}
+
+	/* For all non-idle threads, make sure to set them ready to run.
+	 * We skip the idle thread by checking > 1 */
+	if (kernel_tcbs_count > 0) {
+		kernel_tcbs_ready_mask |= (1U << (kernel_tcbs_count - 1));
+	}
+
+	/* Increment the count at the end, otherwise the tcbs_ready_mask won't be set properly and the bit alignment will be off */
+	kernel_tcbs_count++;
+}
+
+/* Function to block current thread for a specified amount of time.
+ * It is important to note the idlethread must never be blocked.
+ */
+void kernel_tcb_block(uint32_t blocking_timeout)
+{
+	/* The thread blocking must happen inside of a critical section */
+	__disable_irq();
+
+	/* The blocking function should NEVER be called on the idle thread */
+	if (current_thread != kernel_tcbs[0]) {
+
+		/* First load the desired blocking timeout to the thread attribute */
+		current_thread->timeout = blocking_timeout;
+
+		/* Then block the thread by clearing the appropriate bit in the tcb ready mask */
+		kernel_tcbs_ready_mask &= ~(1U << (kernel_tcbs_index - 1));
+
+		/* Immediately call the scheduler to context switch away from the blocked thread */
+		kernel_scheduler_round_robin();
+	}
+
+	__enable_irq();
+}
+
+/* This function works in tandem with the kernel_tcb_block().
+ * At every iteration of the Systick Handler, this function is called to go through each timeout value
+ * 	for every thread in kernel_tcbs[] and decrement all non-0 timeout values by 1. If the timeout value
+ * 	reaches 0, then unblock the thread.
+ */
+void kernel_tcb_permit(void)
+{
+	/* Start at i = 1U to skip the idle thread */
+	uint8_t i;
+	for (i = 1U; i < kernel_tcbs_count; i++) {
+		if (kernel_tcbs[i]->timeout != 0) {
+			--kernel_tcbs[i]->timeout;
+
+			/* Nested if statement because the previous if statement COULD decrement a thread's timeout to 0 */
+			if (kernel_tcbs[i]->timeout == 0) {
+				kernel_tcbs_ready_mask |= (1U << (i - 1));
+			}
+		}
+	}
+}
+
+static void kernel_on_idle(void)
+{
+	led_green_toggle();
+	led_green_toggle();
 }
 
 /* ARM Cortex M exception handler that centralizes context switching for an RTOS implementation.

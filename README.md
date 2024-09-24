@@ -3,3 +3,12 @@ Logic Analyzer view of round robin with busy-wait delay:
 
 Logic Analyzer view of round robin with efficient blocking using D4 as the idle thread view:
 ![pulseview_2024-09-24_11-04-03](https://github.com/user-attachments/assets/3a7904bb-4d63-426f-a640-1295e95b4819)
+
+
+Logic Analyzer view of priority based scheduling:
+![pulseview_2024-09-24_14-06-57](https://github.com/user-attachments/assets/60e8d43c-74a0-457c-9f91-c4a8f696bffd)
+
+The blinky1 (red) thread is being blocked for 20ms, and it runs for 6ms.
+The blinky2 (orange) thread is being blocked for 50ms, and it runs for 18ms.
+The idle thread runs whenever both threads are blocked and the systick is firing at an interval of 1ms at a time.
+The square waves show the priority based scheduling is working properly as the red LED is always meeting its deadline. It is clearly shown by how blinky1 preempts the blinky2 (orange) thread at varied positions of each total run cycle of blinky2.

@@ -9,7 +9,7 @@ void main_blinky1(void)
 {
 	while (1) {
 		led_red_toggle();
-		systick_delay_ms(1000);
+		systick_delay_ms(1500);
 	}
 }
 

@@ -3,8 +3,12 @@
 #include "kernel.h"
 
 /* These pointers will be used inside ISRs so make sure they're volatile */
-tcb_type* volatile current_thread;
-tcb_type* volatile next_thread;
+static tcb_type* volatile current_thread;
+static tcb_type* volatile next_thread;
+
+static tcb_type* kernel_tcbs[32 + 1];	/* array that holds all the thread pointers */
+static uint8_t kernel_tcbs_count;		/* int value that keeps count of total threads started */
+static uint8_t kernel_tcbs_index;		/* index value to be used for round robin scheduling */
 
 /* Function to set the priorities for the interrupts so PendSV does NOT preempt Systick.
  * PendSV should only context switch by tail-chaining and once other interrupts have already been serviced.
@@ -16,8 +20,16 @@ void kernel_initialize(void)
 	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
 }
 
-void kernel_scheduler(void)
+void kernel_scheduler_round_robin(void)
 {
+	kernel_tcbs_index++;
+
+	/* Wrap around to the beginning of the tcbs array once you get to the end */
+	if (kernel_tcbs_index == kernel_tcbs_count) {
+		kernel_tcbs_index = 0U;
+	}
+	next_thread = kernel_tcbs[kernel_tcbs_index];
+
 	/* Scheduling algorithm goes here such as FCFS, RR, Priority-based, etc */
 	if (next_thread != current_thread) {
 		/* Set the PendSVHandler bit to get ready for context switch.
@@ -29,6 +41,7 @@ void kernel_scheduler(void)
 		SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 	}
 }
+
 
 void kernel_tcb_start(
 	tcb_type* me,
@@ -89,8 +102,27 @@ void kernel_tcb_start(
 	for (sp = sp - 1; sp >= stack_limit; sp--) {
 		*sp = 0xBAADF00DU;
 	}
+
+	/* Check to make sure we don't go over the thread limit */
+	if (kernel_tcbs_count < (sizeof(kernel_tcbs) / sizeof(kernel_tcbs[0]))) {
+		kernel_tcbs[kernel_tcbs_count++] = me;
+	}
 }
 
+/* ARM Cortex M exception handler that centralizes context switching for an RTOS implementation.
+ * The code for the context switching needs to be written in inline assembly.
+ * It was assisted by writing the desired C code logic first, then triggering the PendSV manually and using the
+ * 	compiler generated ASM code as the base.
+ *
+ * The logic for the PendSV Handler is as follows:
+ * 1) Disable interrupts
+ * 2) Check if theres a current thread running. If there is, Push the context by saving R4-R11 and saving the SP to current TCB's SP.
+ * 3) Load the next thread and set the current thread to the next thread.
+ * 4) Load the SP for the now new current thread into the processor's SP.
+ * 5) Restore the context of the new current thread by popping registers R4-R11.
+ * 6) Enable interrupts.
+ * 7) Branch to the next thread.
+ */
 __attribute__((naked)) void PendSV_Handler(void)
 {
 	/* __disable__irq(); */

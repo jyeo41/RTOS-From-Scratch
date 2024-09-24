@@ -38,7 +38,7 @@ void SysTick_Handler(void)
 
 	/* Remember the scheduler needs to be called inside of a critical section to avoid race conditions */
 	__disable_irq();
-	kernel_scheduler();
+	kernel_scheduler_round_robin();
 	__enable_irq();
 }
 

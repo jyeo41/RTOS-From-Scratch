@@ -10,14 +10,20 @@ static tcb_type* kernel_tcbs[32 + 1];	/* array that holds all the thread pointer
 static uint8_t kernel_tcbs_count;		/* int value that keeps count of total threads started */
 static uint8_t kernel_tcbs_index;		/* index value to be used for round robin scheduling */
 
-/* Function to set the priorities for the interrupts so PendSV does NOT preempt Systick.
+/* Function to start the kernel.
+ * Set the priorities for the interrupts so PendSV does NOT preempt Systick.
  * PendSV should only context switch by tail-chaining and once other interrupts have already been serviced.
+ * Start the scheduler to initiate the running state of one thread, without having to wait for the Systick to trigger it first.
  */
-void kernel_initialize(void)
+void kernel_start(void)
 {
-	/* Lower number set means higher priority calling */
+	/* Lower number set means higher priority calling. */
 	NVIC_SetPriority(SysTick_IRQn, 0U);
 	NVIC_SetPriority(PendSV_IRQn, 0xFFU);
+
+	__disable_irq();
+	kernel_scheduler_round_robin();
+	__enable_irq();
 }
 
 void kernel_scheduler_round_robin(void)

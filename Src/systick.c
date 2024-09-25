@@ -5,6 +5,7 @@
 #include "led.h"
 
 #define SYSTEM_CLOCK 		16000000	/* 16 MHz */
+#define TRIGGER_EVERY_SEC	SYSTEM_CLOCK
 #define TRIGGER_EVERY_MS	(SYSTEM_CLOCK / 1000U)
 
 static uint32_t get_tick_counter(void);
@@ -21,7 +22,7 @@ void systick_initialize(void)
 	SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
 
 	/* Set the Reload value to trigger the Systick handler every 1 ms */
-	SysTick->LOAD = TRIGGER_EVERY_MS - 1U;
+	SysTick->LOAD = (TRIGGER_EVERY_MS) - 1U;
 
 	/* Clear the value in CURRENT register */
 	SysTick->VAL = 0;
@@ -35,7 +36,7 @@ void systick_initialize(void)
 
 void SysTick_Handler(void)
 {
-	led_blue_toggle();
+	//led_green_toggle();
 
 	/* Doesn't need to run inside of a critical section because an interrupt cannot be pre-empted by a thread.
 	 * This means no thread will be able to possibly modify the values of the kernel_tcbs[] while this runs
@@ -46,8 +47,6 @@ void SysTick_Handler(void)
 	__disable_irq();
 	kernel_scheduler_priority_based();
 	__enable_irq();
-
-	led_blue_toggle();
 }
 
 void systick_delay_ms(uint32_t delay)

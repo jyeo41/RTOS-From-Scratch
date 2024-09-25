@@ -45,6 +45,13 @@ void led_green_toggle(void)
 	}
 }
 
+void led_green_off(void)
+{
+	if (GPIOD->ODR & GPIO_ODR_OD12) {
+		GPIOD->BSRR = GPIO_BSRR_BR12;
+	}
+}
+
 /* Orange LED PD 13 */
 void led_orange_toggle(void)
 {
@@ -69,6 +76,13 @@ void led_red_toggle(void)
 		GPIOD->BSRR = GPIO_BSRR_BR14;
 	} else {
 		GPIOD->BSRR = GPIO_BSRR_BS14;
+	}
+}
+
+void led_blue_off(void)
+{
+	if (GPIOD->ODR & GPIO_ODR_OD15) {
+		GPIOD->BSRR = GPIO_BSRR_BR15;
 	}
 }
 

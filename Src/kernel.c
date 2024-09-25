@@ -70,6 +70,8 @@ void kernel_scheduler_priority_based(void)
 		 * 	PendSV is a special interrupt just like Systick which has a negative IRQn.
 		 * 	This means you have to use the SCB_ICSR register to set the pending bit.
 		 */
+		led_green_off();
+		led_blue_off();
 		SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 	}
 }

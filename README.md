@@ -1,5 +1,12 @@
 # RTOS From Scratch
+Repository to track the implementation code for a priority-based RTOS from scratch. The main focus of this project was to understand the fundamentals of AAPCS exception entry and function calling standards to manipulate registers for successful context switching. The other focus being, to get exposure to programming on an STM32 and get more practice with bare metal programming. There were two courses used to learn about the theory and implementation of the program and the links are below in the references section. The final goal was to showcase real-time task switching using the 4 LEDs on the board to visually represent 3 threads that preempt each other and the idle thread. A logic analyzer was used to inspect the behaviors of the thread to make sure the scheduler and thread logic was working properly.
 
+## Build and Tools
+Languages: C
+MCU: STM32F407G - DISC1
+IDE: STM32CubeIDE
+Libraries: CMSIS
+Logic Analyzer: HiLetgo USB Logic Analyzer 8CH 24MHz with Sigrok's Pulse View
 
 Logic Analyzer view of round robin with busy-wait delay:
 ![pulseview_2024-09-24_09-03-26](https://github.com/user-attachments/assets/39ef5784-83ba-4b42-9be9-e772e4fd8069)

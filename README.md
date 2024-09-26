@@ -1,3 +1,6 @@
+# RTOS From Scratch
+
+
 Logic Analyzer view of round robin with busy-wait delay:
 ![pulseview_2024-09-24_09-03-26](https://github.com/user-attachments/assets/39ef5784-83ba-4b42-9be9-e772e4fd8069)
 The 4th digital signal represents the systick handler firing at a consistent interval. As shown in the analyzer view, the context switching always happens when the systick handler fires because the PendSV Handler is triggered through the scheduler everytime the Systick Handler is triggered. The pattern of the square waves show the round robin scheduler is working as intended.<br>

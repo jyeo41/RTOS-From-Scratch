@@ -10,7 +10,7 @@ void main_blinky1(void)
 	while (1) {
 		uint32_t i;
 		for (i = 0; i < 100000; i++) {
-			led_red_toggle();
+			led_green_toggle();
 		}
 		kernel_tcb_block(1500U);
 	}
